@@ -24,7 +24,8 @@ local TransferUnit            = Spring.TransferUnit
 
 -- Constants
 local GAIA_TEAM_ID            = Spring.GetGaiaTeamID()
-local MAX_PLACEMENT_RETRIES   = 3
+local MAX_PLACEMENT_RETRIES   = 3 -- Try to find free spot for mine this many times,
+                                  -- otherwise skip placing it
 
 local mineTypes = {}
 mineTypes["apminesign"] = {
@@ -57,28 +58,19 @@ function gadget:UnitFinished(unitID, unitDefID, unitTeam)
       local mineData = mineTypes[cp.minetype]
       if mineData then
          local x, y, z = GetUnitPosition(unitID)
-         local mineCount = 0
-         while mineCount < mineData.number do
-            local placementRetry = 1
-
-            local xpos = RandPos(mineData) + x
-            local zpos = RandPos(mineData) + z
-
+         for mineCount = 1, mineData.number do
             -- Try to find free spot for mine three times, otherwise skip placing this mine
-            while #GetUnitsInCylinder(xpos, zpos, mineData.minDist, GAIA_TEAM_ID) > 0 and placementRetry <= MAX_PLACEMENT_RETRIES do
-               xpos = RandPos(mineData) + x
-               zpos = RandPos(mineData) + z
+            for placementRetry = 1, MAX_PLACEMENT_RETRIES do
+               local xpos = x + RandPos(mineData)
+               local zpos = z + RandPos(mineData)
 
-               placementRetry = placementRetry + 1
+               if #GetUnitsInCylinder(xpos, zpos, mineData.minDist, GAIA_TEAM_ID) == 0 then
+                  local ypos = GetGroundHeight(xpos, zpos)
+                  local mineID = CreateUnit(mineData.mineToSpawn, xpos, ypos, zpos, 0, GAIA_TEAM_ID)
+                  SetUnitBlocking(mineID, false, false, false)
+                  break
+               end
             end
-
-            if #GetUnitsInCylinder(xpos, zpos, mineData.minDist, GAIA_TEAM_ID) == 0 then
-               local ypos = GetGroundHeight(xpos, zpos)
-               local mineID = CreateUnit(mineData.mineToSpawn, xpos, ypos, zpos, 0, GAIA_TEAM_ID)
-               SetUnitBlocking(mineID, false, false, false)
-            end
-
-            mineCount = mineCount + 1
          end
          -- DelayCall needed to fix the notify widget as unsynced can't find gaia units!
          GG.Delay.DelayCall(TransferUnit, {unitID, GAIA_TEAM_ID}, 1)
